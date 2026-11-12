@@ -1,0 +1,16 @@
+{
+  "name": "marin-backend",
+  "version": "1.0.0",
+  "description": "Backend de Marín Digital: recibe solicitudes y las guarda en MongoDB Atlas",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "mongodb": "^6.9.0"
+  }
+}
