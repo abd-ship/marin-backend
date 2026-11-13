@@ -110,7 +110,6 @@ app.post('/api/recomendacion', async (req, res) => {
   }
   try {
     const datos = req.body || {};
-    const modelo = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
     const instruccion = `Eres el asesor de Marín Digital, un negocio que ofrece páginas web, asesoría de calistenia y street workout, y marketing digital.
 Recomienda solo paquetes de este catálogo. No inventes precios, planes ni servicios.
 ${CATALOGO}
@@ -120,22 +119,37 @@ Responde únicamente con JSON, con esta forma exacta:
 {"recomendaciones":[{"servicio":"Páginas web | Calistenia y street workout | Marketing digital","paquete":"nombre exacto del paquete","motivo":"una frase corta"}],"mensaje":"2 o 3 frases cercanas y claras, en español, dirigidas a la persona"}
 Incluye solo los servicios que la persona eligió.`;
 
-    const respuesta = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${clave}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: instruccion }] }],
-          generationConfig: { responseMimeType: 'application/json', temperature: 0.4 }
-        })
+    // Prueba varios modelos, en orden, hasta que uno responda
+    const modelos = [...new Set([process.env.GEMINI_MODEL, 'gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.5-flash-lite'].filter(Boolean))];
+    let texto = null;
+    let ultimoError = '';
+
+    for (const modelo of modelos) {
+      const respuesta = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${clave}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: instruccion }] }],
+            generationConfig: { responseMimeType: 'application/json', temperature: 0.4 }
+          })
+        }
+      );
+      if (respuesta.ok) {
+        const data = await respuesta.json();
+        texto = data.candidates[0].content.parts[0].text;
+        break;
       }
-    );
-    if (!respuesta.ok) {
-      throw new Error('Gemini respondió ' + respuesta.status);
+      const cuerpo = await respuesta.text();
+      ultimoError = `modelo ${modelo}: ${respuesta.status} ${cuerpo.slice(0, 300)}`;
+      console.error('Gemini no respondió:', ultimoError);
     }
-    const data = await respuesta.json();
-    const texto = data.candidates[0].content.parts[0].text;
+
+    if (!texto) {
+      throw new Error(ultimoError || 'ningún modelo respondió');
+    }
+
     const resultado = JSON.parse(texto);
 
     // Solo se aceptan servicios y paquetes del catálogo real
