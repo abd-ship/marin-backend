@@ -110,7 +110,6 @@ app.post('/api/recomendacion', async (req, res) => {
   }
   try {
     const datos = req.body || {};
-    const modelo = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
     const instruccion = `Eres el asesor de Marín Digital, un negocio que ofrece páginas web, asesoría de calistenia y street workout, y marketing digital.
 Recomienda solo paquetes de este catálogo. No inventes precios, planes ni servicios.
 ${CATALOGO}
@@ -120,27 +119,46 @@ Responde únicamente con un objeto JSON, con esta forma exacta:
 {"recomendaciones":[{"servicio":"Páginas web | Calistenia y street workout | Marketing digital","paquete":"nombre exacto del paquete","motivo":"una frase corta"}],"mensaje":"2 o 3 frases cercanas y claras, en español, dirigidas a la persona"}
 Incluye solo los servicios que la persona eligió.`;
 
-    const respuesta = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: 'Bearer ' + clave
-      },
-      body: JSON.stringify({
-        model: modelo,
-        messages: [{ role: 'user', content: instruccion }],
-        response_format: { type: 'json_object' },
-        temperature: 0.4
-      })
-    });
+    // Prueba modelos en orden hasta que uno responda
+    const modelos = [...new Set([
+      process.env.GROQ_MODEL,
+      'llama-3.1-8b-instant',
+      'openai/gpt-oss-20b',
+      'meta-llama/llama-4-scout-17b-16e-instruct'
+    ].filter(Boolean))];
 
-    if (!respuesta.ok) {
+    let texto = null;
+    let ultimoError = '';
+
+    for (const modelo of modelos) {
+      const respuesta = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + clave
+        },
+        body: JSON.stringify({
+          model: modelo,
+          messages: [{ role: 'user', content: instruccion }],
+          response_format: { type: 'json_object' },
+          temperature: 0.4
+        })
+      });
+      if (respuesta.ok) {
+        const data = await respuesta.json();
+        texto = data.choices[0].message.content;
+        break;
+      }
       const cuerpo = await respuesta.text();
-      throw new Error('Groq respondió ' + respuesta.status + ': ' + cuerpo.slice(0, 300));
+      ultimoError = `modelo ${modelo}: ${respuesta.status} ${cuerpo.slice(0, 200)}`;
+      console.error('Groq no respondió:', ultimoError);
     }
 
-    const data = await respuesta.json();
-    const resultado = JSON.parse(data.choices[0].message.content);
+    if (!texto) {
+      throw new Error(ultimoError || 'ningún modelo respondió');
+    }
+
+    const resultado = JSON.parse(texto);
 
     // Solo se aceptan servicios y paquetes del catálogo real
     const recomendaciones = (resultado.recomendaciones || []).filter((r) =>
