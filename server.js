@@ -77,6 +77,89 @@ app.post('/api/solicitudes', async (req, res) => {
   }
 });
 
+// ----- Recomendación con IA (Google Gemini) -----
+const CATALOGO = `
+Páginas web (pago único):
+- Básica: $1.200.000 COP. 1 página, formulario y diseño responsive. Entrega en 5 días.
+- Estándar: $2.200.000 COP. Hasta 4 secciones, catálogo y Google Maps. Entrega en 8 días.
+- Premium: $3.800.000 COP. Sitio completo con panel admin y chatbot. Entrega en 15 días.
+
+Calistenia y street workout (al mes):
+- Principiante: $180.000 COP. Evaluación inicial, plan de fuerza base y ajustes cada 2 semanas.
+- Intermedio: $260.000 COP. Progresiones hacia nuevas habilidades y seguimiento semanal.
+- Avanzado: $350.000 COP. Habilidades avanzadas, ajustes frecuentes y revisión de técnica.
+
+Marketing digital (al mes):
+- Básico: $450.000 COP. Diagnóstico de redes y sitio, y campañas básicas.
+- Estándar: $900.000 COP. Estrategia de contenido, calendario mensual y campañas en redes.
+- Premium: $1.500.000 COP. Estrategia completa en varias redes y medición mensual.
+
+Descuento: 10% si la persona contrata dos o más servicios como un solo paquete.
+`;
+
+const PAQUETES_VALIDOS = {
+  'Páginas web': ['Básica', 'Estándar', 'Premium'],
+  'Calistenia y street workout': ['Principiante', 'Intermedio', 'Avanzado'],
+  'Marketing digital': ['Básico', 'Estándar', 'Premium']
+};
+
+app.post('/api/recomendacion', async (req, res) => {
+  const clave = process.env.GEMINI_API_KEY;
+  if (!clave) {
+    return res.status(503).json({ error: 'IA no configurada' });
+  }
+  try {
+    const datos = req.body || {};
+    const modelo = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+    const instruccion = `Eres el asesor de Marín Digital, un negocio que ofrece páginas web, asesoría de calistenia y street workout, y marketing digital.
+Recomienda solo paquetes de este catálogo. No inventes precios, planes ni servicios.
+${CATALOGO}
+Datos de la persona: ${JSON.stringify(datos)}
+
+Responde únicamente con JSON, con esta forma exacta:
+{"recomendaciones":[{"servicio":"Páginas web | Calistenia y street workout | Marketing digital","paquete":"nombre exacto del paquete","motivo":"una frase corta"}],"mensaje":"2 o 3 frases cercanas y claras, en español, dirigidas a la persona"}
+Incluye solo los servicios que la persona eligió.`;
+
+    const respuesta = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${clave}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: instruccion }] }],
+          generationConfig: { responseMimeType: 'application/json', temperature: 0.4 }
+        })
+      }
+    );
+    if (!respuesta.ok) {
+      throw new Error('Gemini respondió ' + respuesta.status);
+    }
+    const data = await respuesta.json();
+    const texto = data.candidates[0].content.parts[0].text;
+    const resultado = JSON.parse(texto);
+
+    // Solo se aceptan servicios y paquetes del catálogo real
+    const recomendaciones = (resultado.recomendaciones || []).filter((r) =>
+      PAQUETES_VALIDOS[r.servicio] && PAQUETES_VALIDOS[r.servicio].includes(r.paquete)
+    );
+    if (recomendaciones.length === 0 || typeof resultado.mensaje !== 'string') {
+      throw new Error('Respuesta de la IA fuera del catálogo');
+    }
+
+    res.json({
+      mensaje: resultado.mensaje.slice(0, 600),
+      recomendaciones: recomendaciones.map((r) => ({
+        servicio: r.servicio,
+        paquete: r.paquete,
+        motivo: String(r.motivo || '').slice(0, 200)
+      }))
+    });
+  } catch (error) {
+    console.error('Error en la recomendación con IA:', error.message);
+    res.status(502).json({ error: 'No pudimos generar la recomendación' });
+  }
+});
+
 // ----- Rutas del panel admin -----
 app.post('/api/admin/login', (req, res) => {
   const { usuario, clave } = req.body || {};
