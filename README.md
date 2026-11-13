@@ -6,9 +6,9 @@
 ![MongoDB](https://img.shields.io/badge/MongoDB-47A248?logo=mongodb&logoColor=white)
 ![Groq](https://img.shields.io/badge/Groq-F55036?logoColor=white)
 
-Este es el servidor del proyecto **Marín Digital**. Recibe las solicitudes del formulario de contacto, las guarda en MongoDB, protege el panel de administración y consulta a la inteligencia artificial para generar las recomendaciones.
+Este es el servidor de mi proyecto **Marín Digital**. Recibe las solicitudes del formulario de contacto, las guarda en MongoDB, protege el panel de administración y consulta a la inteligencia artificial para generar las recomendaciones.
 
-🔗 **Servicio en producción:** https://marin-backend.onrender.com
+🔗 **Proyecto:** https://marin-backend.onrender.com
 
 🌐 **Página del proyecto:** [abd-ship.github.io/marin-digital](https://abd-ship.github.io/marin-digital/)
 
