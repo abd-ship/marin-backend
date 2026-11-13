@@ -113,16 +113,7 @@ Si aparece `Servidor listo en puerto 3000`, el servicio está funcionando.
 - El archivo `.env` está excluido en `.gitignore` y nunca se sube al repositorio.
 - El panel admin requiere un token válido en cada petición, y el token caduca.
 
-## Estado del proyecto
 
-| Módulo | Estado |
-|---|---|
-| Recepción y guardado de solicitudes en MongoDB | ✅ Completo |
-| Panel de administración con login y estados | ✅ Completo |
-| Recomendación con IA y validación del catálogo | ✅ Completo |
-| Publicación en Render | ✅ Completo |
-
----
 
 ## Autor
 
