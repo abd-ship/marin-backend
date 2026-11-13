@@ -77,7 +77,7 @@ app.post('/api/solicitudes', async (req, res) => {
   }
 });
 
-// ----- Recomendación con IA (Google Gemini) -----
+// ----- Recomendación con IA (Groq) -----
 const CATALOGO = `
 Páginas web (pago único):
 - Básica: $1.200.000 COP. 1 página, formulario y diseño responsive. Entrega en 5 días.
@@ -104,53 +104,43 @@ const PAQUETES_VALIDOS = {
 };
 
 app.post('/api/recomendacion', async (req, res) => {
-  const clave = process.env.GEMINI_API_KEY;
+  const clave = process.env.GROQ_API_KEY;
   if (!clave) {
     return res.status(503).json({ error: 'IA no configurada' });
   }
   try {
     const datos = req.body || {};
+    const modelo = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
     const instruccion = `Eres el asesor de Marín Digital, un negocio que ofrece páginas web, asesoría de calistenia y street workout, y marketing digital.
 Recomienda solo paquetes de este catálogo. No inventes precios, planes ni servicios.
 ${CATALOGO}
 Datos de la persona: ${JSON.stringify(datos)}
 
-Responde únicamente con JSON, con esta forma exacta:
+Responde únicamente con un objeto JSON, con esta forma exacta:
 {"recomendaciones":[{"servicio":"Páginas web | Calistenia y street workout | Marketing digital","paquete":"nombre exacto del paquete","motivo":"una frase corta"}],"mensaje":"2 o 3 frases cercanas y claras, en español, dirigidas a la persona"}
 Incluye solo los servicios que la persona eligió.`;
 
-    // Prueba varios modelos, en orden, hasta que uno responda
-    const modelos = [...new Set([process.env.GEMINI_MODEL, 'gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.5-flash-lite'].filter(Boolean))];
-    let texto = null;
-    let ultimoError = '';
+    const respuesta = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + clave
+      },
+      body: JSON.stringify({
+        model: modelo,
+        messages: [{ role: 'user', content: instruccion }],
+        response_format: { type: 'json_object' },
+        temperature: 0.4
+      })
+    });
 
-    for (const modelo of modelos) {
-      const respuesta = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${clave}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: instruccion }] }],
-            generationConfig: { responseMimeType: 'application/json', temperature: 0.4 }
-          })
-        }
-      );
-      if (respuesta.ok) {
-        const data = await respuesta.json();
-        texto = data.candidates[0].content.parts[0].text;
-        break;
-      }
+    if (!respuesta.ok) {
       const cuerpo = await respuesta.text();
-      ultimoError = `modelo ${modelo}: ${respuesta.status} ${cuerpo.slice(0, 300)}`;
-      console.error('Gemini no respondió:', ultimoError);
+      throw new Error('Groq respondió ' + respuesta.status + ': ' + cuerpo.slice(0, 300));
     }
 
-    if (!texto) {
-      throw new Error(ultimoError || 'ningún modelo respondió');
-    }
-
-    const resultado = JSON.parse(texto);
+    const data = await respuesta.json();
+    const resultado = JSON.parse(data.choices[0].message.content);
 
     // Solo se aceptan servicios y paquetes del catálogo real
     const recomendaciones = (resultado.recomendaciones || []).filter((r) =>
