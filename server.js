@@ -122,7 +122,6 @@ Incluye solo los servicios que la persona eligió.`;
     // Prueba modelos en orden hasta que uno responda
     const modelos = [...new Set([
       process.env.GROQ_MODEL,
-      'llama-3.1-8b-instant',
       'openai/gpt-oss-20b',
       'meta-llama/llama-4-scout-17b-16e-instruct'
     ].filter(Boolean))];
@@ -147,6 +146,7 @@ Incluye solo los servicios que la persona eligió.`;
       if (respuesta.ok) {
         const data = await respuesta.json();
         texto = data.choices[0].message.content;
+        console.log('Recomendación generada con el modelo:', modelo);
         break;
       }
       const cuerpo = await respuesta.text();
